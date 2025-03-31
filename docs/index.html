@@ -19,6 +19,16 @@
 <body>
     <div id="root">Hello, GitHub Pages!</div>
     <!-- Link to your JavaScript file and use type="text/babel" to enable JSX transpiling -->
-    <script type="text/babel" src="script.jsx"></script>
+    <script type="text/babel">
+      document.addEventListener("DOMContentLoaded", function() {
+        // Your script content here
+        const App = () => {
+          // Your React component content here
+        };
+        
+        const root = ReactDOM.createRoot(document.getElementById("root"));
+        root.render(<App />);
+      });
+    </script>
 </body>
 </html>
