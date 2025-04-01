@@ -9,6 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSortBy = e.target.value;
         drawWaterfall();
     });
+
+    // Add window resize listener for responsive chart
+    window.addEventListener('resize', () => {
+        if (timelineData) {
+            drawWaterfall();
+        }
+    });
 });
 
 // Handle file upload
@@ -66,7 +73,7 @@ function prepareTimelineData(entries) {
             start: relativeStart,
             duration: duration,
             timings: timings,
-            type: entry.response.content.mimeType.split(';')[0],
+            type: entry.response.content.mimeType?.split(';')[0] || 'unknown',
             size: entry.response.bodySize || 0,
             status: entry.response.status,
             isBlocking: entry.request.url.endsWith('.css') || entry.request.url.endsWith('.js')
@@ -93,6 +100,7 @@ function drawWaterfall() {
     const width = chartContainer.clientWidth - margin.left - margin.right;
     const height = Math.max(400, sortedData.length * 25);
     
+    // Create SVG
     const svg = d3.select(chartContainer)
         .append("svg")
         .attr("width", width + margin.left + margin.right)
@@ -100,7 +108,7 @@ function drawWaterfall() {
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Scales
+    // Create scales
     const xScale = d3.scaleLinear()
         .domain([0, d3.max(sortedData, d => d.start + d.duration)])
         .range([0, width]);
@@ -116,45 +124,50 @@ function drawWaterfall() {
         .range(['#636e72', '#74b9ff', '#55efc4', '#ffeaa7', '#fab1a0', '#fd79a8', '#a29bfe']);
 
     // Add waterfall bars
-    svg.selectAll(".bar-group")
+    const barGroups = svg.selectAll(".bar-group")
         .data(sortedData)
         .enter()
         .append("g")
-        .attr("class", "bar-group")
-        .each(function(d, i) {
-            const g = d3.select(this);
-            
-            d.timings.forEach(timing => {
-                g.append("rect")
-                    .attr("x", xScale(d.start + timing.start))
-                    .attr("y", yScale(i))
-                    .attr("width", Math.max(0.5, xScale(timing.duration) - xScale(0)))
-                    .attr("height", yScale.bandwidth())
-                    .attr("fill", phaseColorScale(timing.phase))
-                    .append("title")
-                    .text(`${timing.phase}: ${timing.duration.toFixed(2)}ms`);
-            });
+        .attr("class", "bar-group");
 
-            if (d.isBlocking) {
-                g.append("rect")
-                    .attr("x", xScale(d.start))
-                    .attr("y", yScale(i))
-                    .attr("width", xScale(d.duration) - xScale(0))
-                    .attr("height", yScale.bandwidth())
-                    .attr("fill", "none")
-                    .attr("stroke", "#e84393")
-                    .attr("stroke-width", 2)
-                    .attr("stroke-dasharray", "4,4");
-            }
-
-            g.append("text")
-                .attr("x", -5)
-                .attr("y", yScale(i) + yScale.bandwidth() / 2)
-                .attr("text-anchor", "end")
-                .attr("dominant-baseline", "middle")
-                .attr("class", "text-xs")
-                .text(d.url.split('/').pop());
+    // Add timing phase segments
+    barGroups.each(function(d, i) {
+        const g = d3.select(this);
+        
+        // Draw timing segments
+        d.timings.forEach(timing => {
+            g.append("rect")
+                .attr("x", xScale(d.start + timing.start))
+                .attr("y", yScale(i))
+                .attr("width", Math.max(0.5, xScale(timing.duration) - xScale(0)))
+                .attr("height", yScale.bandwidth())
+                .attr("fill", phaseColorScale(timing.phase))
+                .append("title")
+                .text(`${timing.phase}: ${timing.duration.toFixed(2)}ms`);
         });
+
+        // Indicate blocking resources
+        if (d.isBlocking) {
+            g.append("rect")
+                .attr("x", xScale(d.start))
+                .attr("y", yScale(i))
+                .attr("width", xScale(d.duration) - xScale(0))
+                .attr("height", yScale.bandwidth())
+                .attr("fill", "none")
+                .attr("stroke", "#e84393")
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "4,4");
+        }
+
+        // Add URL labels
+        g.append("text")
+            .attr("x", -5)
+            .attr("y", yScale(i) + yScale.bandwidth() / 2)
+            .attr("text-anchor", "end")
+            .attr("dominant-baseline", "middle")
+            .attr("font-size", "12px")
+            .text(d.url.split('/').pop());
+    });
 
     // Add legend
     const legendData = ['Blocking', 'DNS', 'Connecting', 'SSL', 'Sending', 'Waiting', 'Receiving'];
@@ -173,11 +186,11 @@ function drawWaterfall() {
         legendItem.append("text")
             .attr("x", 15)
             .attr("y", 9)
-            .attr("class", "text-xs")
+            .attr("font-size", "12px")
             .text(phase);
     });
 
-    // Add axes
+    // Add x-axis
     const xAxis = d3.axisBottom(xScale)
         .tickFormat(d => `${d}ms`);
 
@@ -250,7 +263,7 @@ function analyzeHar(data) {
         totalSize: entries.reduce((sum, entry) => sum + (entry.response.bodySize || 0), 0) / 1024,
         averageResponseTime: entries.reduce((sum, entry) => sum + entry.time, 0) / entries.length,
         contentTypes: entries.reduce((types, entry) => {
-            const contentType = entry.response.content.mimeType.split(';')[0];
+            const contentType = entry.response.content.mimeType?.split(';')[0] || 'unknown';
             types[contentType] = (types[contentType] || 0) + 1;
             return types;
         }, {}),
