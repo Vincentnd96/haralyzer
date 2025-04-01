@@ -9,10 +9,13 @@
 <body>
     <div id="root"></div>
     <script type="module">
+        console.log("Loading React and dependencies...");
         import React, { useState, useEffect, useRef, useCallback } from "https://cdn.skypack.dev/react";
         import { createRoot } from "https://cdn.skypack.dev/react-dom/client";
         import * as d3 from "https://cdn.skypack.dev/d3";
         import { Upload, Table, ChartLine, Warning, CheckCircle, ArrowsDownUp, Globe } from "https://cdn.skypack.dev/@phosphor-icons/react";
+
+        console.log("Dependencies loaded, initializing App component...");
 
         function App() {
             const [harData, setHarData] = useState(null);
@@ -422,6 +425,7 @@
             );
         }
 
+        console.log("Rendering App component...");
         const root = createRoot(document.getElementById("root"));
         root.render(<App />);
     </script>
