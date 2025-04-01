@@ -461,28 +461,4 @@
 
                                     {/* Content type breakdown */}
                                     <Card>
-                                        <div className="space-y-4">
-                                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                                <ChartLine /> Content Types
-                                            </h2>
-                                            <div className="space-y-2">
-                                                {Object.entries(analysis.contentTypes).map(([type, count]) => (
-                                                    <div key={type} className="flex justify-between">
-                                                        <span>{type}</span>
-                                                        <span>{count}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </Card>
-                                </div>
-                            )}
-                        </div>
-                    </PageContainer>
-                </SparkApp>
-            );
-        }
-
-        // Render the application
-        const root = createRoot(document.getElementById("root"));
-        root.render
+                                        <div className
