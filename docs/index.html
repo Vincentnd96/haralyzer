@@ -4,430 +4,70 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HAR File Analyzer</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
-<body>
-    <div id="root"></div>
-    <script type="module">
-        console.log("Loading React and dependencies...");
-        import React, { useState, useEffect, useRef, useCallback } from "https://cdn.skypack.dev/react";
-        import { createRoot } from "https://cdn.skypack.dev/react-dom/client";
-        import * as d3 from "https://cdn.skypack.dev/d3";
-        import { Upload, Table, ChartLine, Warning, CheckCircle, ArrowsDownUp, Globe } from "https://cdn.skypack.dev/@phosphor-icons/react";
+<body class="bg-gray-100">
+    <div class="container mx-auto p-6">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">HAR File Analyzer</h1>
+            <p class="text-gray-600">Upload a HAR file to analyze web performance metrics and identify issues</p>
+        </div>
 
-        console.log("Dependencies loaded, initializing App component...");
+        <!-- File Upload Section -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Upload HAR File</h2>
+            <input type="file" accept=".har" id="harFileInput" class="w-full p-2 border rounded">
+        </div>
 
-        function App() {
-            const [harData, setHarData] = useState(null);
-            const [analysis, setAnalysis] = useState(null);
-            const [errors, setErrors] = useState([]);
-            const [timelineData, setTimelineData] = useState(null);
-            const [sortBy, setSortBy] = useState("startTime");
-            const timelineRef = useRef(null);
-            const waterfallRef = useRef(null);
+        <!-- Analysis Results -->
+        <div id="analysisResults" class="hidden">
+            <!-- Status Indicator -->
+            <div id="statusIndicator" class="mb-6"></div>
 
-            const handleFileUpload = (event) => {
-                const file = event.target.files[0];
-                const reader = new FileReader();
-
-                reader.onload = (e) => {
-                    try {
-                        const data = JSON.parse(e.target.result);
-                        setHarData(data);
-                        analyzeHar(data);
-                    } catch (error) {
-                        console.error("Error parsing HAR file:", error);
-                        setErrors([{ type: 'Parse Error', message: 'Invalid HAR file format' }]);
-                    }
-                };
-
-                reader.readAsText(file);
-            };
-
-            const prepareTimelineData = (entries) => {
-                if (!entries.length) return null;
-
-                const pageStartTime = new Date(entries[0].startedDateTime).getTime();
-                
-                return entries.map(entry => {
-                    const startTime = new Date(entry.startedDateTime).getTime();
-                    const relativeStart = startTime - pageStartTime;
-                    const duration = entry.time;
-                    
-                    const {
-                        blocked = 0,
-                        dns = 0,
-                        connect = 0,
-                        ssl = 0,
-                        send = 0,
-                        wait = 0,
-                        receive = 0
-                    } = entry.timings;
-
-                    const timings = [
-                        { phase: 'Blocking', start: 0, duration: blocked },
-                        { phase: 'DNS', start: blocked, duration: dns },
-                        { phase: 'Connecting', start: blocked + dns, duration: connect },
-                        { phase: 'SSL', start: blocked + dns + connect, duration: ssl },
-                        { phase: 'Sending', start: blocked + dns + connect + ssl, duration: send },
-                        { phase: 'Waiting', start: blocked + dns + connect + ssl + send, duration: wait },
-                        { phase: 'Receiving', start: blocked + dns + connect + ssl + send + wait, duration: receive }
-                    ].filter(t => t.duration > 0);
-
-                    return {
-                        url: entry.request.url.split('?')[0],
-                        start: relativeStart,
-                        duration: duration,
-                        timings: timings,
-                        type: entry.response.content.mimeType.split(';')[0],
-                        size: entry.response.bodySize || 0,
-                        status: entry.response.status,
-                        isBlocking: entry.request.url.endsWith('.css') || entry.request.url.endsWith('.js')
-                    };
-                });
-            };
-
-            const drawWaterfall = useCallback(() => {
-                if (!timelineData || !waterfallRef.current) return;
-
-                d3.select(waterfallRef.current).selectAll("*").remove();
-
-                const sortedData = [...timelineData].sort((a, b) => {
-                    if (sortBy === "startTime") return a.start - b.start;
-                    if (sortBy === "duration") return b.duration - a.duration;
-                    if (sortBy === "size") return b.size - a.size;
-                    return 0;
-                });
-
-                const margin = { top: 20, right: 20, bottom: 30, left: 200 };
-                const width = waterfallRef.current.clientWidth - margin.left - margin.right;
-                const height = Math.max(400, sortedData.length * 25);
-                
-                const svg = d3.select(waterfallRef.current)
-                    .append("svg")
-                    .attr("width", width + margin.left + margin.right)
-                    .attr("height", height + margin.top + margin.bottom)
-                    .append("g")
-                    .attr("transform", `translate(${margin.left},${margin.top})`);
-
-                const xScale = d3.scaleLinear()
-                    .domain([0, d3.max(sortedData, d => d.start + d.duration)])
-                    .range([0, width]);
-
-                const yScale = d3.scaleBand()
-                    .domain(sortedData.map((_, i) => i))
-                    .range([0, height])
-                    .padding(0.1);
-
-                const phaseColorScale = d3.scaleOrdinal()
-                    .domain(['Blocking', 'DNS', 'Connecting', 'SSL', 'Sending', 'Waiting', 'Receiving'])
-                    .range(['#636e72', '#74b9ff', '#55efc4', '#ffeaa7', '#fab1a0', '#fd79a8', '#a29bfe']);
-
-                svg.selectAll(".bar-group")
-                    .data(sortedData)
-                    .enter()
-                    .append("g")
-                    .attr("class", "bar-group")
-                    .each(function(d, i) {
-                        const g = d3.select(this);
-                        
-                        d.timings.forEach(timing => {
-                            g.append("rect")
-                                .attr("x", xScale(d.start + timing.start))
-                                .attr("y", yScale(i))
-                                .attr("width", Math.max(0.5, xScale(timing.duration) - xScale(0)))
-                                .attr("height", yScale.bandwidth())
-                                .attr("fill", phaseColorScale(timing.phase))
-                                .append("title")
-                                .text(`${timing.phase}: ${timing.duration.toFixed(2)}ms`);
-                        });
-
-                        if (d.isBlocking) {
-                            g.append("rect")
-                                .attr("x", xScale(d.start))
-                                .attr("y", yScale(i))
-                                .attr("width", xScale(d.duration) - xScale(0))
-                                .attr("height", yScale.bandwidth())
-                                .attr("fill", "none")
-                                .attr("stroke", "#e84393")
-                                .attr("stroke-width", 2)
-                                .attr("stroke-dasharray", "4,4");
-                        }
-
-                        g.append("text")
-                            .attr("x", -5)
-                            .attr("y", yScale(i) + yScale.bandwidth() / 2)
-                            .attr("text-anchor", "end")
-                            .attr("dominant-baseline", "middle")
-                            .attr("class", "text-xs")
-                            .text(d.url.split('/').pop());
-                    });
-
-                const legendData = ['Blocking', 'DNS', 'Connecting', 'SSL', 'Sending', 'Waiting', 'Receiving'];
-                const legend = svg.append("g")
-                    .attr("transform", `translate(${width - 150}, -15)`);
-
-                legendData.forEach((phase, i) => {
-                    const legendItem = legend.append("g")
-                        .attr("transform", `translate(${Math.floor(i/4) * 75}, ${(i%4) * 15})`);
-
-                    legendItem.append("rect")
-                        .attr("width", 10)
-                        .attr("height", 10)
-                        .attr("fill", phaseColorScale(phase));
-
-                    legendItem.append("text")
-                        .attr("x", 15)
-                        .attr("y", 9)
-                        .attr("class", "text-xs")
-                        .text(phase);
-                });
-
-                const xAxis = d3.axisBottom(xScale)
-                    .tickFormat(d => `${d}ms`);
-
-                svg.append("g")
-                    .attr("transform", `translate(0,${height})`)
-                    .call(xAxis);
-            }, [timelineData, sortBy]);
-
-            const analyzeHar = (data) => {
-                if (!data?.log?.entries) {
-                    setErrors([{ type: 'Structure Error', message: 'Missing required HAR structure' }]);
-                    return;
-                }
-
-                const entries = data.log.entries;
-                setTimelineData(prepareTimelineData(entries));
-
-                const foundErrors = [];
-
-                const httpErrors = entries.filter(entry => {
-                    const status = entry.response.status;
-                    return status >= 400;
-                });
-
-                const slowResponses = entries.filter(entry => entry.time > 1000);
-
-                const largeResponses = entries.filter(entry => 
-                    (entry.response.bodySize || 0) > 5 * 1024 * 1024
-                );
-
-                const blockingResources = entries.filter(entry => 
-                    entry.request.url.endsWith('.css') || 
-                    (entry.request.url.endsWith('.js') && !entry.request.url.includes('async'))
-                );
-
-                httpErrors.forEach(entry => {
-                    foundErrors.push({
-                        type: 'HTTP Error',
-                        message: `${entry.request.method} ${entry.request.url} returned status ${entry.response.status}`,
-                        details: entry.response.statusText
-                    });
-                });
-
-                slowResponses.forEach(entry => {
-                    foundErrors.push({
-                        type: 'Performance Warning',
-                        message: `Slow response (${Math.round(entry.time)}ms) for ${entry.request.url}`,
-                        details: `Expected < 1000ms`
-                    });
-                });
-
-                largeResponses.forEach(entry => {
-                    foundErrors.push({
-                        type: 'Size Warning',
-                        message: `Large response (${Math.round(entry.response.bodySize / 1024 / 1024)}MB) for ${entry.request.url}`,
-                        details: 'Expected < 5MB'
-                    });
-                });
-
-                if (blockingResources.length > 0) {
-                    foundErrors.push({
-                        type: 'Performance Warning',
-                        message: `Found ${blockingResources.length} render-blocking resources`,
-                        details: 'Consider using async/defer for scripts or preload for critical CSS'
-                    });
-                }
-
-                setErrors(foundErrors);
-
-                const statusGroups = entries.reduce((groups, entry) => {
-                    const status = entry.response.status;
-                    const statusCategory = Math.floor(status / 100) * 100;
-                    const statusKey = `${statusCategory}-${statusCategory + 99}`;
-                    
-                    if (!groups[statusKey]) {
-                        groups[statusKey] = {
-                            count: 0,
-                            details: {}
-                        };
-                    }
-                    
-                    groups[statusKey].count++;
-                    
-                    if (!groups[statusKey].details[status]) {
-                        groups[statusKey].details[status] = 0;
-                    }
-                    groups[statusKey].details[status]++;
-                    
-                    return groups;
-                }, {});
-
-                const analysis = {
-                    totalRequests: entries.length,
-                    totalSize: entries.reduce((sum, entry) => 
-                        sum + (entry.response.bodySize || 0), 0) / 1024,
-                    averageResponseTime: entries.reduce((sum, entry) => 
-                        sum + entry.time, 0) / entries.length,
-                    contentTypes: entries.reduce((types, entry) => {
-                        const contentType = entry.response.content.mimeType.split(';')[0];
-                        types[contentType] = (types[contentType] || 0) + 1;
-                        return types;
-                    }, {}),
-                    statusGroups,
-                    errorCount: httpErrors.length,
-                    slowResponseCount: slowResponses.length,
-                    largeResponseCount: largeResponses.length,
-                    blockingResourceCount: blockingResources.length
-                };
-
-                setAnalysis(analysis);
-            };
-
-            useEffect(() => {
-                drawWaterfall();
-            }, [timelineData, sortBy, drawWaterfall]);
-
-            return (
-                <div className="container mx-auto p-4">
-                    <div className="text-center space-y-2">
-                        <h1 className="text-3xl font-bold">HAR File Analyzer</h1>
-                        <p className="text-gray-600">Upload a HAR file to analyze web performance metrics and identify issues</p>
-                    </div>
-
-                    <div className="my-4 p-4 border rounded shadow">
-                        <h2 className="text-xl font-semibold">Upload HAR File</h2>
-                        <input
-                            type="file"
-                            accept=".har"
-                            onChange={handleFileUpload}
-                            className="mt-2 p-2 border rounded"
-                        />
-                    </div>
-
-                    {timelineData && (
-                        <div className="my-4 p-4 border rounded shadow">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xl font-semibold flex items-center gap-2">
-                                    <ArrowsDownUp /> Waterfall Chart
-                                </h2>
-                                <select 
-                                    value={sortBy} 
-                                    onChange={(e) => setSortBy(e.target.value)}
-                                    className="p-2 border rounded"
-                                >
-                                    <option value="startTime">Sort by Start Time</option>
-                                    <option value="duration">Sort by Duration</option>
-                                    <option value="size">Sort by Size</option>
-                                </select>
-                            </div>
-                            <div 
-                                ref={waterfallRef} 
-                                className="w-full overflow-x-auto"
-                                style={{ minHeight: "400px" }}
-                            />
-                        </div>
-                    )}
-
-                    {analysis && (
-                        <div className="my-4 p-4 border rounded shadow">
-                            {errors.length > 0 ? (
-                                <>
-                                    <h2 className="text-xl font-semibold flex items-center gap-2 text-red-600">
-                                        <Warning /> Issues Found ({errors.length})
-                                    </h2>
-                                    <div className="space-y-4">
-                                        {errors.map((error, index) => (
-                                            <div key={index} className="p-4 bg-red-100 rounded-lg">
-                                                <h3 className="font-semibold">{error.type}</h3>
-                                                <p className="text-gray-600">{error.message}</p>
-                                                {error.details && (
-                                                    <p className="text-sm text-gray-600 mt-1">{error.details}</p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="flex items-center gap-2 text-green-500">
-                                    <CheckCircle className="w-6 h-6" />
-                                    <span className="text-xl font-semibold">No issues found!</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {analysis && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="my-4 p-4 border rounded shadow">
-                                <h2 className="text-xl font-semibold flex items-center gap-2">
-                                    <Table /> Overview
-                                </h2>
-                                <div className="space-y-2">
-                                    <p>Total Requests: {analysis.totalRequests}</p>
-                                    <p>Total Size: {analysis.totalSize.toFixed(2)} KB</p>
-                                    <p>Average Response Time: {analysis.averageResponseTime.toFixed(2)} ms</p>
-                                    <p>HTTP Errors: {analysis.errorCount}</p>
-                                    <p>Slow Responses: {analysis.slowResponseCount}</p>
-                                    <p>Large Responses: {analysis.largeResponseCount}</p>
-                                    <p>Blocking Resources: {analysis.blockingResourceCount}</p>
-                                </div>
-                            </div>
-
-                            <div className="my-4 p-4 border rounded shadow">
-                                <h2 className="text-xl font-semibold flex items-center gap-2">
-                                    <Globe /> HTTP Status Codes
-                                </h2>
-                                <div className="space-y-2">
-                                    {Object.entries(analysis.statusGroups).sort().map(([range, data]) => (
-                                        <div key={range}>
-                                            <h3 className="font-semibold">{range} ({data.count} requests)</h3>
-                                            <div className="ml-4 space-y-1">
-                                                {Object.entries(data.details).sort().map(([status, count]) => (
-                                                    <div key={status} className="flex justify-between text-sm">
-                                                        <span>Status {status}</span>
-                                                        <span>{count}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="my-4 p-4 border rounded shadow">
-                                <h2 className="text-xl font-semibold flex items-center gap-2">
-                                    <ChartLine /> Content Types
-                                </h2>
-                                <div className="space-y-2">
-                                    {Object.entries(analysis.contentTypes).map(([type, count]) => (
-                                        <div key={type} className="flex justify-between">
-                                            <span>{type}</span>
-                                            <span>{count}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+            <!-- Waterfall Chart -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">Waterfall Chart</h2>
+                    <select id="sortSelect" class="border rounded p-2">
+                        <option value="startTime">Sort by Start Time</option>
+                        <option value="duration">Sort by Duration</option>
+                        <option value="size">Sort by Size</option>
+                    </select>
                 </div>
-            );
-        }
+                <div id="waterfallChart" class="overflow-x-auto"></div>
+            </div>
 
-        console.log("Rendering App component...");
-        const root = createRoot(document.getElementById("root"));
-        root.render(<App />);
-    </script>
+            <!-- Errors Section -->
+            <div id="errorsSection" class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Issues</h2>
+                <div id="errorsList"></div>
+            </div>
+
+            <!-- Analysis Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Overview -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4">Overview</h2>
+                    <div id="overviewStats" class="space-y-2"></div>
+                </div>
+
+                <!-- HTTP Status Codes -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4">HTTP Status Codes</h2>
+                    <div id="statusCodes" class="space-y-4"></div>
+                </div>
+
+                <!-- Content Types -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4">Content Types</h2>
+                    <div id="contentTypes"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
+
