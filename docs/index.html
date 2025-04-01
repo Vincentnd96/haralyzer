@@ -9,20 +9,19 @@
 <body>
     <div id="root"></div>
     <script type="module">
-        import * as React from "https://cdn.skypack.dev/react";
+        import React, { useState, useEffect, useRef, useCallback } from "https://cdn.skypack.dev/react";
         import { createRoot } from "https://cdn.skypack.dev/react-dom/client";
         import * as d3 from "https://cdn.skypack.dev/d3";
         import { Upload, Table, ChartLine, Warning, CheckCircle, ArrowsDownUp, Globe } from "https://cdn.skypack.dev/@phosphor-icons/react";
 
-        // Main application component
         function App() {
-            const [harData, setHarData] = React.useState(null);
-            const [analysis, setAnalysis] = React.useState(null);
-            const [errors, setErrors] = React.useState([]);
-            const [timelineData, setTimelineData] = React.useState(null);
-            const [sortBy, setSortBy] = React.useState("startTime");
-            const timelineRef = React.useRef(null);
-            const waterfallRef = React.useRef(null);
+            const [harData, setHarData] = useState(null);
+            const [analysis, setAnalysis] = useState(null);
+            const [errors, setErrors] = useState([]);
+            const [timelineData, setTimelineData] = useState(null);
+            const [sortBy, setSortBy] = useState("startTime");
+            const timelineRef = useRef(null);
+            const waterfallRef = useRef(null);
 
             const handleFileUpload = (event) => {
                 const file = event.target.files[0];
@@ -85,7 +84,7 @@
                 });
             };
 
-            const drawWaterfall = React.useCallback(() => {
+            const drawWaterfall = useCallback(() => {
                 if (!timelineData || !waterfallRef.current) return;
 
                 d3.select(waterfallRef.current).selectAll("*").remove();
@@ -293,7 +292,7 @@
                 setAnalysis(analysis);
             };
 
-            React.useEffect(() => {
+            useEffect(() => {
                 drawWaterfall();
             }, [timelineData, sortBy, drawWaterfall]);
 
