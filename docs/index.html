@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HAR File Analyzer</title>
-    <link rel="stylesheet" href="https://unpkg.com/@github/spark/dist/index.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
 </head>
 <body>
     <div id="root"></div>
@@ -12,19 +12,10 @@
         import * as React from "https://cdn.skypack.dev/react";
         import { createRoot } from "https://cdn.skypack.dev/react-dom/client";
         import * as d3 from "https://cdn.skypack.dev/d3";
-        import { 
-            SparkApp, 
-            PageContainer,
-            Button, 
-            Card,
-            Input,
-            Select
-        } from "https://cdn.skypack.dev/@github/spark/components";
         import { Upload, Table, ChartLine, Warning, CheckCircle, ArrowsDownUp, Globe } from "https://cdn.skypack.dev/@phosphor-icons/react";
 
         // Main application component
         function App() {
-            // State for storing HAR data, analysis results, errors, and timeline view
             const [harData, setHarData] = React.useState(null);
             const [analysis, setAnalysis] = React.useState(null);
             const [errors, setErrors] = React.useState([]);
@@ -33,7 +24,6 @@
             const timelineRef = React.useRef(null);
             const waterfallRef = React.useRef(null);
 
-            // Handle file upload
             const handleFileUpload = (event) => {
                 const file = event.target.files[0];
                 const reader = new FileReader();
@@ -52,7 +42,6 @@
                 reader.readAsText(file);
             };
 
-            // Prepare timeline data with dependency analysis
             const prepareTimelineData = (entries) => {
                 if (!entries.length) return null;
 
@@ -63,7 +52,6 @@
                     const relativeStart = startTime - pageStartTime;
                     const duration = entry.time;
                     
-                    // Break down timing phases
                     const {
                         blocked = 0,
                         dns = 0,
@@ -74,7 +62,6 @@
                         receive = 0
                     } = entry.timings;
 
-                    // Calculate cumulative timings for waterfall chart
                     const timings = [
                         { phase: 'Blocking', start: 0, duration: blocked },
                         { phase: 'DNS', start: blocked, duration: dns },
@@ -93,19 +80,16 @@
                         type: entry.response.content.mimeType.split(';')[0],
                         size: entry.response.bodySize || 0,
                         status: entry.response.status,
-                        isBlocking: entry.request.url.endsWith('.css') || entry.request.url.endsWith('.js') // Simplified blocking resource detection
+                        isBlocking: entry.request.url.endsWith('.css') || entry.request.url.endsWith('.js')
                     };
                 });
             };
 
-            // Draw waterfall chart visualization using D3
             const drawWaterfall = React.useCallback(() => {
                 if (!timelineData || !waterfallRef.current) return;
 
-                // Clear previous visualization
                 d3.select(waterfallRef.current).selectAll("*").remove();
 
-                // Sort data based on selected criterion
                 const sortedData = [...timelineData].sort((a, b) => {
                     if (sortBy === "startTime") return a.start - b.start;
                     if (sortBy === "duration") return b.duration - a.duration;
@@ -124,7 +108,6 @@
                     .append("g")
                     .attr("transform", `translate(${margin.left},${margin.top})`);
 
-                // Scales
                 const xScale = d3.scaleLinear()
                     .domain([0, d3.max(sortedData, d => d.start + d.duration)])
                     .range([0, width]);
@@ -134,12 +117,10 @@
                     .range([0, height])
                     .padding(0.1);
 
-                // Color scale for timing phases
                 const phaseColorScale = d3.scaleOrdinal()
                     .domain(['Blocking', 'DNS', 'Connecting', 'SSL', 'Sending', 'Waiting', 'Receiving'])
                     .range(['#636e72', '#74b9ff', '#55efc4', '#ffeaa7', '#fab1a0', '#fd79a8', '#a29bfe']);
 
-                // Add waterfall bars
                 svg.selectAll(".bar-group")
                     .data(sortedData)
                     .enter()
@@ -148,19 +129,17 @@
                     .each(function(d, i) {
                         const g = d3.select(this);
                         
-                        // Draw timing phase segments
                         d.timings.forEach(timing => {
                             g.append("rect")
                                 .attr("x", xScale(d.start + timing.start))
                                 .attr("y", yScale(i))
-                                .attr("width", Math.max(0.5, xScale(timing.duration) - xScale(0))) // Minimum width for visibility
+                                .attr("width", Math.max(0.5, xScale(timing.duration) - xScale(0)))
                                 .attr("height", yScale.bandwidth())
                                 .attr("fill", phaseColorScale(timing.phase))
                                 .append("title")
                                 .text(`${timing.phase}: ${timing.duration.toFixed(2)}ms`);
                         });
 
-                        // Indicate blocking resources
                         if (d.isBlocking) {
                             g.append("rect")
                                 .attr("x", xScale(d.start))
@@ -173,7 +152,6 @@
                                 .attr("stroke-dasharray", "4,4");
                         }
 
-                        // URL labels
                         g.append("text")
                             .attr("x", -5)
                             .attr("y", yScale(i) + yScale.bandwidth() / 2)
@@ -183,7 +161,6 @@
                             .text(d.url.split('/').pop());
                     });
 
-                // Add legend
                 const legendData = ['Blocking', 'DNS', 'Connecting', 'SSL', 'Sending', 'Waiting', 'Receiving'];
                 const legend = svg.append("g")
                     .attr("transform", `translate(${width - 150}, -15)`);
@@ -204,7 +181,6 @@
                         .text(phase);
                 });
 
-                // Add axes
                 const xAxis = d3.axisBottom(xScale)
                     .tickFormat(d => `${d}ms`);
 
@@ -213,7 +189,6 @@
                     .call(xAxis);
             }, [timelineData, sortBy]);
 
-            // Analyze HAR file and generate metrics
             const analyzeHar = (data) => {
                 if (!data?.log?.entries) {
                     setErrors([{ type: 'Structure Error', message: 'Missing required HAR structure' }]);
@@ -225,27 +200,22 @@
 
                 const foundErrors = [];
 
-                // Check for HTTP errors
                 const httpErrors = entries.filter(entry => {
                     const status = entry.response.status;
                     return status >= 400;
                 });
 
-                // Check for slow responses (> 1000ms)
                 const slowResponses = entries.filter(entry => entry.time > 1000);
 
-                // Check for large responses (> 5MB)
                 const largeResponses = entries.filter(entry => 
                     (entry.response.bodySize || 0) > 5 * 1024 * 1024
                 );
 
-                // Check for render-blocking resources
                 const blockingResources = entries.filter(entry => 
                     entry.request.url.endsWith('.css') || 
                     (entry.request.url.endsWith('.js') && !entry.request.url.includes('async'))
                 );
 
-                // Add found errors to the list
                 httpErrors.forEach(entry => {
                     foundErrors.push({
                         type: 'HTTP Error',
@@ -280,7 +250,6 @@
 
                 setErrors(foundErrors);
 
-                // Group requests by HTTP status code
                 const statusGroups = entries.reduce((groups, entry) => {
                     const status = entry.response.status;
                     const statusCategory = Math.floor(status / 100) * 100;
@@ -295,7 +264,6 @@
                     
                     groups[statusKey].count++;
                     
-                    // Track individual status codes within the category
                     if (!groups[statusKey].details[status]) {
                         groups[statusKey].details[status] = 0;
                     }
@@ -325,140 +293,138 @@
                 setAnalysis(analysis);
             };
 
-            // Update waterfall when data or sort criteria changes
             React.useEffect(() => {
                 drawWaterfall();
             }, [timelineData, sortBy, drawWaterfall]);
 
             return (
-                <SparkApp>
-                    <PageContainer maxWidth="large">
-                        <div className="space-y-6">
-                            {/* Header section */}
-                            <div className="text-center space-y-2">
-                                <h1 className="text-3xl font-bold">HAR File Analyzer</h1>
-                                <p className="text-fg-secondary">
-                                    Upload a HAR file to analyze web performance metrics and identify issues
-                                </p>
+                <div className="container mx-auto p-4">
+                    <div className="text-center space-y-2">
+                        <h1 className="text-3xl font-bold">HAR File Analyzer</h1>
+                        <p className="text-gray-600">Upload a HAR file to analyze web performance metrics and identify issues</p>
+                    </div>
+
+                    <div className="my-4 p-4 border rounded shadow">
+                        <h2 className="text-xl font-semibold">Upload HAR File</h2>
+                        <input
+                            type="file"
+                            accept=".har"
+                            onChange={handleFileUpload}
+                            className="mt-2 p-2 border rounded"
+                        />
+                    </div>
+
+                    {timelineData && (
+                        <div className="my-4 p-4 border rounded shadow">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-semibold flex items-center gap-2">
+                                    <ArrowsDownUp /> Waterfall Chart
+                                </h2>
+                                <select 
+                                    value={sortBy} 
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="p-2 border rounded"
+                                >
+                                    <option value="startTime">Sort by Start Time</option>
+                                    <option value="duration">Sort by Duration</option>
+                                    <option value="size">Sort by Size</option>
+                                </select>
+                            </div>
+                            <div 
+                                ref={waterfallRef} 
+                                className="w-full overflow-x-auto"
+                                style={{ minHeight: "400px" }}
+                            />
+                        </div>
+                    )}
+
+                    {analysis && (
+                        <div className="my-4 p-4 border rounded shadow">
+                            {errors.length > 0 ? (
+                                <>
+                                    <h2 className="text-xl font-semibold flex items-center gap-2 text-red-600">
+                                        <Warning /> Issues Found ({errors.length})
+                                    </h2>
+                                    <div className="space-y-4">
+                                        {errors.map((error, index) => (
+                                            <div key={index} className="p-4 bg-red-100 rounded-lg">
+                                                <h3 className="font-semibold">{error.type}</h3>
+                                                <p className="text-gray-600">{error.message}</p>
+                                                {error.details && (
+                                                    <p className="text-sm text-gray-600 mt-1">{error.details}</p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex items-center gap-2 text-green-500">
+                                    <CheckCircle className="w-6 h-6" />
+                                    <span className="text-xl font-semibold">No issues found!</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {analysis && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="my-4 p-4 border rounded shadow">
+                                <h2 className="text-xl font-semibold flex items-center gap-2">
+                                    <Table /> Overview
+                                </h2>
+                                <div className="space-y-2">
+                                    <p>Total Requests: {analysis.totalRequests}</p>
+                                    <p>Total Size: {analysis.totalSize.toFixed(2)} KB</p>
+                                    <p>Average Response Time: {analysis.averageResponseTime.toFixed(2)} ms</p>
+                                    <p>HTTP Errors: {analysis.errorCount}</p>
+                                    <p>Slow Responses: {analysis.slowResponseCount}</p>
+                                    <p>Large Responses: {analysis.largeResponseCount}</p>
+                                    <p>Blocking Resources: {analysis.blockingResourceCount}</p>
+                                </div>
                             </div>
 
-                            {/* File upload section */}
-                            <Card>
-                                <div className="space-y-4">
-                                    <h2 className="text-xl font-semibold">Upload HAR File</h2>
-                                    <div className="flex items-center gap-4">
-                                        <Input
-                                            type="file"
-                                            accept=".har"
-                                            onChange={handleFileUpload}
-                                            icon={<Upload />}
-                                        />
-                                    </div>
-                                </div>
-                            </Card>
-
-                            {/* Waterfall chart section */}
-                            {timelineData && (
-                                <Card>
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                                <ArrowsDownUp /> Waterfall Chart
-                                            </h2>
-                                            <Select 
-                                                value={sortBy} 
-                                                onChange={(e) => setSortBy(e.target.value)}
-                                            >
-                                                <option value="startTime">Sort by Start Time</option>
-                                                <option value="duration">Sort by Duration</option>
-                                                <option value="size">Sort by Size</option>
-                                            </Select>
-                                        </div>
-                                        <div 
-                                            ref={waterfallRef} 
-                                            className="w-full overflow-x-auto"
-                                            style={{ minHeight: "400px" }}
-                                        />
-                                    </div>
-                                </Card>
-                            )}
-
-                            {/* Errors section */}
-                            {analysis && (
-                                <Card>
-                                    <div className="space-y-4">
-                                        {errors.length > 0 ? (
-                                            <>
-                                                <h2 className="text-xl font-semibold flex items-center gap-2 text-accent-9">
-                                                    <Warning /> Issues Found ({errors.length})
-                                                </h2>
-                                                <div className="space-y-4">
-                                                    {errors.map((error, index) => (
-                                                        <div key={index} className="p-4 bg-accent-3 rounded-lg">
-                                                            <h3 className="font-semibold">{error.type}</h3>
-                                                            <p className="text-fg-secondary">{error.message}</p>
-                                                            {error.details && (
-                                                                <p className="text-sm text-fg-secondary mt-1">{error.details}</p>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="flex items-center gap-2 text-green-500">
-                                                <CheckCircle className="w-6 h-6" />
-                                                <span className="text-xl font-semibold">No issues found!</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </Card>
-                            )}
-
-                            {/* Analysis results section */}
-                            {analysis && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Overview metrics */}
-                                    <Card>
-                                        <div className="space-y-4">
-                                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                                <Table /> Overview
-                                            </h2>
-                                            <div className="space-y-2">
-                                                <p>Total Requests: {analysis.totalRequests}</p>
-                                                <p>Total Size: {analysis.totalSize.toFixed(2)} KB</p>
-                                                <p>Average Response Time: {analysis.averageResponseTime.toFixed(2)} ms</p>
-                                                <p>HTTP Errors: {analysis.errorCount}</p>
-                                                <p>Slow Responses: {analysis.slowResponseCount}</p>
-                                                <p>Large Responses: {analysis.largeResponseCount}</p>
-                                                <p>Blocking Resources: {analysis.blockingResourceCount}</p>
-                                            </div>
-                                        </div>
-                                    </Card>
-
-                                    {/* HTTP Status Summary */}
-                                    <Card>
-                                        <div className="space-y-4">
-                                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                                <Globe /> HTTP Status Codes
-                                            </h2>
-                                            <div className="space-y-2">
-                                                {Object.entries(analysis.statusGroups).sort().map(([range, data]) => (
-                                                    <div key={range}>
-                                                        <h3 className="font-semibold">{range} ({data.count} requests)</h3>
-                                                        <div className="ml-4 space-y-1">
-                                                            {Object.entries(data.details).sort().map(([status, count]) => (
-                                                                <div key={status} className="flex justify-between text-sm">
-                                                                    <span>Status {status}</span>
-                                                                    <span>{count}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                            <div className="my-4 p-4 border rounded shadow">
+                                <h2 className="text-xl font-semibold flex items-center gap-2">
+                                    <Globe /> HTTP Status Codes
+                                </h2>
+                                <div className="space-y-2">
+                                    {Object.entries(analysis.statusGroups).sort().map(([range, data]) => (
+                                        <div key={range}>
+                                            <h3 className="font-semibold">{range} ({data.count} requests)</h3>
+                                            <div className="ml-4 space-y-1">
+                                                {Object.entries(data.details).sort().map(([status, count]) => (
+                                                    <div key={status} className="flex justify-between text-sm">
+                                                        <span>Status {status}</span>
+                                                        <span>{count}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                    </Card>
+                                    ))}
+                                </div>
+                            </div>
 
-                                    {/* Content type breakdown */}
-                                    <Card>
-                                        <div className
+                            <div className="my-4 p-4 border rounded shadow">
+                                <h2 className="text-xl font-semibold flex items-center gap-2">
+                                    <ChartLine /> Content Types
+                                </h2>
+                                <div className="space-y-2">
+                                    {Object.entries(analysis.contentTypes).map(([type, count]) => (
+                                        <div key={type} className="flex justify-between">
+                                            <span>{type}</span>
+                                            <span>{count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById("root"));
+        root.render(<App />);
+    </script>
+</body>
+</html>
