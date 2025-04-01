@@ -7,7 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('harFileInput').addEventListener('change', handleFileUpload);
     document.getElementById('sortSelect').addEventListener('change', (e) => {
         currentSortBy = e.target.value;
-        drawWaterfall();
+        if (timelineData) {
+            drawWaterfall();
+        }
     });
 
     // Add window resize listener for responsive chart
@@ -295,7 +297,11 @@ function analyzeHar(data) {
     };
 
     updateAnalysisUI(analysis);
-    drawWaterfall();
+    
+    // Explicitly call drawWaterfall() after preparing the timeline data
+    if (timelineData) {
+        drawWaterfall();
+    }
 }
 
 // Update UI components
@@ -375,4 +381,3 @@ function showError(message) {
     errorsList.innerHTML = `<div class="p-4 bg-red-50 rounded-lg">${message}</div>`;
     document.getElementById('analysisResults').classList.remove('hidden');
 }
-
